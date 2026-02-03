@@ -14,7 +14,7 @@ service firebase.storage {
     match /management/{userId}/{imageId} {
       allow read: if isAuthenticated();
       allow write: if isAuthor(userId)
-        && request.resource.size < 5 * 1024 * 1024  // 5MB Limit
+        && request.resource.size < 5 * 1024 * 1024  // 5MB 제한
         && request.resource.contentType.matches('image/.*');
     }
 

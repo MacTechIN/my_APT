@@ -1,3 +1,33 @@
 {
-    "indexes": []
+    "indexes": [
+        {
+            "collectionGroup": "management_notices",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "isPinned",
+                    "order": "DESCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "marketplace_items",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
 }

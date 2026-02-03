@@ -2,41 +2,56 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // 인증 확인 헬퍼 함수
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    // 작성자 확인
     function isAuthor(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Admin check (Initial: Check for 'admin' email or UID, expandable to custom claims)
+    // 관리자 확인 (커스텀 클레임 활용) - 실제 배포시 claim 설정 필요. 개발용으로는 이메일 체크 등 보완 가능.
     function isAdmin() {
-      return isAuthenticated() && (request.auth.token.email == 'admin' || request.auth.uid == 'admin' || request.auth.token.admin == true);
+      return isAuthenticated() && (request.auth.token.admin == true || request.auth.token.email == "admin@apt.com");
     }
 
     // ============================================
     // 관리게시판 (management_notices)
     // ============================================
     match /management_notices/{noticeId} {
+      // 읽기: 인증된 사용자만
       allow read: if isAuthenticated();
-      
-      allow create: if isAdmin() 
+
+      // 생성: 관리자만
+      allow create: if isAdmin()
         && request.resource.data.keys().hasAll(['title', 'content', 'authorId', 'createdAt', 'isPinned'])
         && request.resource.data.createdAt == request.time;
-        
+
+      // 수정: 관리자만 (삭제는 명시적으로 금지 - 없음)
+      // 삭제 플래그(deleted)가 없거나 false여야 함
       allow update: if isAdmin()
         && (!request.resource.data.keys().hasAny(['deleted']) || !resource.data.deleted);
-        
-      allow delete: if false; // Strict Policy: Permanent History
+
+      // 삭제: 절대 허용하지 않음 (영구 보존 정책)
+      allow delete: if false;
     }
 
+    // ============================================
+    // 관리게시판 댓글 (management_comments)
+    // ============================================
     match /management_comments/{commentId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['noticeId', 'content', 'authorId', 'createdAt'])
+        && request.resource.data.noticeId == noticeId;
+
+      // 수정: 작성자만 (24시간 이내)
       allow update: if isAuthor(resource.data.authorId)
         && request.time < resource.data.createdAt + duration.value(24, "h");
+
       allow delete: if false;
     }
 
@@ -45,23 +60,37 @@ service cloud.firestore {
     // ============================================
     match /marketplace_items/{itemId} {
       allow read: if isAuthenticated();
-      
+
       allow create: if isAuthenticated()
-        && request.resource.data.keys().hasAll(['title', 'content', 'images', 'status', 'authorId', 'authorName', 'createdAt'])
-        && request.resource.data.status in ['available', 'completed']
+        && request.resource.data.keys().hasAll([
+          'title', 'description', 'images', 'status',
+          'authorId', 'authorName', 'createdAt', 'isEdited'
+        ])
+        && request.resource.data.status in ['available', 'reserved']
         && request.resource.data.createdAt == request.time;
-        
+
+      // 수정: 작성자만 (상태 변경 및 내용 수정 가능)
       allow update: if isAuthor(resource.data.authorId)
+        // 삭제 플래그 추가 금지
         && (!request.resource.data.keys().hasAny(['deleted']) || !resource.data.deleted)
+        // 생성일은 변경 불가
         && request.resource.data.createdAt == resource.data.createdAt;
-        
+
+      // 삭제: 절대 불가
       allow delete: if false;
     }
 
+    // ============================================
+    // 나눔게시판 댓글 (marketplace_comments)
+    // ============================================
     match /marketplace_comments/{commentId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['itemId', 'content', 'authorId', 'createdAt']);
+
       allow update: if isAuthor(resource.data.authorId);
+
       allow delete: if false;
     }
 
