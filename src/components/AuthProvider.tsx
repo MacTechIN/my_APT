@@ -1,35 +1,52 @@
 "use client";
 
 import { useEffect } from "react";
-import { auth, initAnonymousAuth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { app } from "@/lib/firebase";
 import { useAuthStore } from "@/store/useStore";
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
     const { setUser, setIsLoading } = useAuthStore();
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                setUser({
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName || (user.isAnonymous ? "익명 주민" : ""),
-                    photoURL: user.photoURL,
+        // Dynamic import to avoid SSR/Webpack issues with undici
+        const initAuth = async () => {
+            try {
+                const { getAuth, onAuthStateChanged, signInAnonymously } = await import("firebase/auth");
+                const auth = getAuth(app);
+
+                const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        setUser({
+                            uid: user.uid,
+                            email: user.email,
+                            displayName: user.displayName || (user.isAnonymous ? "익명 주민" : ""),
+                            photoURL: user.photoURL,
+                        });
+                    } else {
+                        try {
+                            await signInAnonymously(auth);
+                        } catch (err) {
+                            console.error("Auto anonymous auth failed:", err);
+                            setUser(null);
+                        }
+                    }
+                    setIsLoading(false);
                 });
-            } else {
-                // Automatically sign in anonymously for easy access as per v2.1 spec
-                try {
-                    await initAnonymousAuth();
-                } catch (err) {
-                    console.error("Auto anonymous auth failed:", err);
-                    setUser(null);
-                }
+
+                return unsubscribe;
+            } catch (err) {
+                console.error("Auth initialization failed:", err);
+                setIsLoading(false);
+                return () => { };
             }
-            setIsLoading(false);
+        };
+
+        let unsub: () => void = () => { };
+        initAuth().then(u => {
+            if (u) unsub = u;
         });
 
-        return () => unsubscribe();
+        return () => unsub();
     }, [setUser, setIsLoading]);
 
     return <>{children}</>;

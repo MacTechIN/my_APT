@@ -1,5 +1,5 @@
-import { storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { app } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import imageCompression from 'browser-image-compression';
 
 export function useStorage() {
@@ -12,6 +12,8 @@ export function useStorage() {
         };
         const compressedFile = await imageCompression(file, options);
 
+        // storage is only initialized here to avoid SSR import issues
+        const storage = getStorage(app);
         const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
         const snapshot = await uploadBytes(storageRef, compressedFile);
         return await getDownloadURL(snapshot.ref);
