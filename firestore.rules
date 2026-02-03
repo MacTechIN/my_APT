@@ -1,19 +1,76 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /posts/{postId} {
-      allow read: if true;
-      allow create: if request.auth != null || request.resource.data.authorId == 'admin';
-      allow update: if request.auth != null;
-      // Only admin can delete
-      allow delete: if request.auth != null && (request.auth.token.email == 'admin' || request.auth.uid == 'admin');
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAuthor(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Admin check (Initial: Check for 'admin' email or UID, expandable to custom claims)
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.email == 'admin' || request.auth.uid == 'admin' || request.auth.token.admin == true);
+    }
+
+    // ============================================
+    // 관리게시판 (management_notices)
+    // ============================================
+    match /management_notices/{noticeId} {
+      allow read: if isAuthenticated();
       
-      match /comments/{commentId} {
-        allow read: if true;
-        allow create: if request.auth != null;
-        allow update: if request.auth != null;
-        allow delete: if request.auth != null && (request.auth.token.email == 'admin' || request.auth.uid == 'admin');
-      }
+      allow create: if isAdmin() 
+        && request.resource.data.keys().hasAll(['title', 'content', 'authorId', 'createdAt', 'isPinned'])
+        && request.resource.data.createdAt == request.time;
+        
+      allow update: if isAdmin()
+        && (!request.resource.data.keys().hasAny(['deleted']) || !resource.data.deleted);
+        
+      allow delete: if false; // Strict Policy: Permanent History
+    }
+
+    match /management_comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthor(resource.data.authorId)
+        && request.time < resource.data.createdAt + duration.value(24, "h");
+      allow delete: if false;
+    }
+
+    // ============================================
+    // 나눔게시판 (marketplace_items)
+    // ============================================
+    match /marketplace_items/{itemId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['title', 'content', 'images', 'status', 'authorId', 'authorName', 'createdAt'])
+        && request.resource.data.status in ['available', 'completed']
+        && request.resource.data.createdAt == request.time;
+        
+      allow update: if isAuthor(resource.data.authorId)
+        && (!request.resource.data.keys().hasAny(['deleted']) || !resource.data.deleted)
+        && request.resource.data.createdAt == resource.data.createdAt;
+        
+      allow delete: if false;
+    }
+
+    match /marketplace_comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthor(resource.data.authorId);
+      allow delete: if false;
+    }
+
+    // ============================================
+    // 사용자 프로필 (users)
+    // ============================================
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthor(userId);
     }
   }
 }
