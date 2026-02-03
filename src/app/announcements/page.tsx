@@ -1,4 +1,4 @@
-import NoticeBoard from "@/components/NoticeBoard";
+import NoticeBoard from "@/components/management/NoticeBoard";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 

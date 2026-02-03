@@ -1,17 +1,12 @@
 import Link from "next/link";
-import { Bell, ShoppingBag, User } from "lucide-react";
+import { Bell, ShoppingBag } from "lucide-react";
+import Header from "@/components/common/Header";
+import BottomNav from "@/components/common/BottomNav";
 
 export default function Home() {
     return (
         <main className="flex min-h-screen flex-col bg-slate-50">
-            {/* Header */}
-            <header className="sticky top-0 z-50 flex h-16 w-full items-center justify-between border-b bg-white px-4 shadow-sm">
-                <h1 className="text-xl font-bold tracking-tight text-primary">my_APT</h1>
-                <div className="flex gap-4">
-                    <Bell className="h-6 w-6 text-slate-600" />
-                    <User className="h-6 w-6 text-slate-600" />
-                </div>
-            </header>
+            <Header />
 
             {/* Hero Section */}
             <section className="flex flex-col items-center justify-center bg-white px-6 py-12 text-center">
@@ -48,21 +43,7 @@ export default function Home() {
                 </Link>
             </div>
 
-            {/* Bottom Navigation (Mobile Only Mobile-First) */}
-            <nav className="fixed bottom-0 flex h-16 w-full items-center justify-around border-t bg-white px-4 sm:hidden">
-                <div className="flex flex-col items-center text-blue-600">
-                    <User className="h-6 w-6" />
-                    <span className="text-xs">홈</span>
-                </div>
-                <Link href="/announcements" className="flex flex-col items-center text-slate-400">
-                    <Bell className="h-6 w-6" />
-                    <span className="text-xs">공지</span>
-                </Link>
-                <Link href="/marketplace" className="flex flex-col items-center text-slate-400">
-                    <ShoppingBag className="h-6 w-6" />
-                    <span className="text-xs">장터</span>
-                </Link>
-            </nav>
+            <BottomNav />
         </main>
     );
 }

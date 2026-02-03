@@ -1,4 +1,4 @@
-import MarketplaceBoard from "@/components/MarketplaceBoard";
+import MarketplaceBoard from "@/components/marketplace/MarketplaceBoard";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 

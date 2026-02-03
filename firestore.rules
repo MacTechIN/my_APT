@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null || request.resource.data.authorId == 'admin';
+      allow update: if request.auth != null;
+      // Only admin can delete
+      allow delete: if request.auth != null && (request.auth.token.email == 'admin' || request.auth.uid == 'admin');
+      
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow update: if request.auth != null;
+        allow delete: if request.auth != null && (request.auth.token.email == 'admin' || request.auth.uid == 'admin');
+      }
+    }
+  }
+}

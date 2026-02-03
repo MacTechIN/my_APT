@@ -1,55 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { db, storage } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    orderBy,
-    onSnapshot,
-    addDoc,
-    updateDoc,
-    doc,
-    serverTimestamp
-} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useState } from "react";
+import { useFirestore, useRealtimeCollection } from "@/hooks/useFirestore";
+import { useStorage } from "@/hooks/useStorage";
 import { useAuthStore } from "@/store/useStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ImagePlus, MessageSquare, Loader2, CheckCircle2, Circle } from "lucide-react";
-import imageCompression from 'browser-image-compression';
+import { ImagePlus, MessageSquare, Loader2, CheckCircle2, Circle, Trash2 } from "lucide-react";
+import { where, orderBy } from "firebase/firestore";
 
 export default function MarketplaceBoard() {
-    const [posts, setPosts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [isPosting, setIsPosting] = useState(false);
     const [title, setTitle] = useState("");
     const [content, setContent] = useState("");
     const [images, setImages] = useState<File[]>([]);
     const { user } = useAuthStore();
+    const { addDocument, updateDocument, deleteDocument } = useFirestore();
+    const { uploadImage } = useStorage();
 
-    useEffect(() => {
-        const q = query(
-            collection(db, "posts"),
-            where("type", "==", "marketplace"),
-            orderBy("createdAt", "desc")
-        );
+    const { data: posts, loading } = useRealtimeCollection("posts", [
+        where("type", "==", "marketplace"),
+        orderBy("createdAt", "desc")
+    ]);
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const postsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setPosts(postsData);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, []);
+    const isAdmin = user?.email === "admin" || user?.uid === "admin";
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -65,21 +42,11 @@ export default function MarketplaceBoard() {
         try {
             const imageUrls = [];
             for (const image of images) {
-                // Image Compression
-                const options = {
-                    maxSizeMB: 1,
-                    maxWidthOrHeight: 1024,
-                    useWebWorker: true,
-                };
-                const compressedFile = await imageCompression(image, options);
-
-                const storageRef = ref(storage, `marketplace/${Date.now()}_${image.name}`);
-                const snapshot = await uploadBytes(storageRef, compressedFile);
-                const url = await getDownloadURL(snapshot.ref);
+                const url = await uploadImage("marketplace", image);
                 imageUrls.push(url);
             }
 
-            await addDoc(collection(db, "posts"), {
+            await addDocument("posts", {
                 type: "marketplace",
                 title,
                 content,
@@ -87,8 +54,6 @@ export default function MarketplaceBoard() {
                 authorName: user?.displayName || "주민",
                 images: imageUrls,
                 status: "available",
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
                 commentCount: 0
             });
 
@@ -105,12 +70,19 @@ export default function MarketplaceBoard() {
     const toggleStatus = async (postId: string, currentStatus: string) => {
         const newStatus = currentStatus === "available" ? "completed" : "available";
         try {
-            await updateDoc(doc(db, "posts", postId), {
-                status: newStatus,
-                updatedAt: serverTimestamp()
-            });
+            await updateDocument("posts", postId, { status: newStatus });
         } catch (error) {
             console.error("Update error:", error);
+        }
+    };
+
+    const handleDelete = async (postId: string) => {
+        if (confirm("정말로 이 게시물을 삭제하시겠습니까? 관리자만 이 작업을 수행할 수 있습니다.")) {
+            try {
+                await deleteDocument("posts", postId);
+            } catch (error) {
+                console.error("Delete error:", error);
+            }
         }
     };
 
@@ -177,9 +149,21 @@ export default function MarketplaceBoard() {
                                     <Badge variant={post.status === 'available' ? 'default' : 'secondary'} className={post.status === 'available' ? 'bg-green-100 text-green-700 border-green-200' : ''}>
                                         {post.status === 'available' ? '나눔중' : '완료'}
                                     </Badge>
-                                    <span className="text-xs text-slate-400">
-                                        {post.createdAt?.toDate().toLocaleDateString('ko-KR')}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">
+                                            {post.createdAt?.toDate().toLocaleDateString('ko-KR')}
+                                        </span>
+                                        {isAdmin && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-red-400 hover:text-red-600"
+                                                onClick={() => handleDelete(post.id)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                                 <CardTitle className="text-lg mt-2">{post.title}</CardTitle>
                             </CardHeader>

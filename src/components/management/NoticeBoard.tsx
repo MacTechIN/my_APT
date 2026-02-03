@@ -1,54 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { db, storage } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    orderBy,
-    onSnapshot,
-    addDoc,
-    updateDoc,
-    doc,
-    serverTimestamp
-} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useState } from "react";
+import { useFirestore, useRealtimeCollection } from "@/hooks/useFirestore";
 import { useAuthStore } from "@/store/useStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ImagePlus, MessageSquare, Loader2 } from "lucide-react";
-import imageCompression from 'browser-image-compression';
+import { MessageSquare, Loader2, Trash2 } from "lucide-react";
+import { where, orderBy } from "firebase/firestore";
 
 export default function NoticeBoard() {
-    const [posts, setPosts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [isPosting, setIsPosting] = useState(false);
     const [title, setTitle] = useState("");
     const [content, setContent] = useState("");
     const { user } = useAuthStore();
+    const { addDocument, deleteDocument } = useFirestore();
 
-    useEffect(() => {
-        const q = query(
-            collection(db, "posts"),
-            where("type", "==", "notice"),
-            orderBy("createdAt", "desc")
-        );
+    const { data: posts, loading } = useRealtimeCollection("posts", [
+        where("type", "==", "notice"),
+        orderBy("createdAt", "desc")
+    ]);
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const postsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setPosts(postsData);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, []);
+    const isAdmin = user?.email === "admin" || user?.uid === "admin"; // Basic admin check
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,14 +31,12 @@ export default function NoticeBoard() {
 
         setIsPosting(true);
         try {
-            await addDoc(collection(db, "posts"), {
+            await addDocument("posts", {
                 type: "notice",
                 title,
                 content,
                 authorId: user?.uid || "admin",
                 authorName: user?.displayName || "관리소",
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
                 commentCount: 0
             });
             setTitle("");
@@ -75,9 +48,19 @@ export default function NoticeBoard() {
         }
     };
 
+    const handleDelete = async (postId: string) => {
+        if (confirm("정말로 이 공지사항을 삭제하시겠습니까? 관리자만 이 작업을 수행할 수 있습니다.")) {
+            try {
+                await deleteDocument("posts", postId);
+            } catch (error) {
+                console.error("Delete error:", error);
+            }
+        }
+    };
+
     return (
         <div className="flex flex-col gap-6 p-4 max-w-2xl mx-auto">
-            {/* Create Post (Admin only ideally, but keeping it open for now) */}
+            {/* Create Post (Admin only ideally) */}
             <Card>
                 <CardHeader>
                     <CardTitle className="text-lg">공지사항 작성</CardTitle>
@@ -115,9 +98,21 @@ export default function NoticeBoard() {
                             <CardHeader className="pb-2">
                                 <div className="flex items-center justify-between">
                                     <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-100">공지</Badge>
-                                    <span className="text-xs text-slate-400">
-                                        {post.createdAt?.toDate().toLocaleDateString('ko-KR')}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">
+                                            {post.createdAt?.toDate().toLocaleDateString('ko-KR')}
+                                        </span>
+                                        {isAdmin && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-red-400 hover:text-red-600"
+                                                onClick={() => handleDelete(post.id)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                                 <CardTitle className="text-lg mt-2">{post.title}</CardTitle>
                             </CardHeader>
